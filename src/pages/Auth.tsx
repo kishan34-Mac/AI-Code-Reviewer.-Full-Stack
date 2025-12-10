@@ -3,44 +3,44 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Code, Loader2 } from "lucide-react";
 import { z } from "zod";
+import axios from "axios";
 
+// point to your backend
+const API_BASE = "http://localhost:4000";
+
+// Validation schemas
 const emailSchema = z.string().email("Invalid email address");
-const passwordSchema = z.string().min(6, "Password must be at least 6 characters");
+const passwordSchema = z
+  .string()
+  .min(6, "Password must be at least 6 characters");
 
 const Auth = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+
   const [isLoading, setIsLoading] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
 
+  // Redirect if token exists
   useEffect(() => {
-    // Check if already logged in
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        navigate("/dashboard");
-      }
-    });
-
-    // Listen for auth changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
-      if (session && event === "SIGNED_IN") {
-        navigate("/dashboard");
-      }
-    });
-
-    return () => subscription.unsubscribe();
+    const token = localStorage.getItem("token");
+    if (token) navigate("/dashboard");
   }, [navigate]);
 
+  // Validate user input
   const validateForm = (isSignup: boolean) => {
     try {
       emailSchema.parse(email);
@@ -67,90 +67,77 @@ const Auth = () => {
     }
   };
 
+  // Handle Sign Up
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!validateForm(true)) return;
-    
     setIsLoading(true);
 
     try {
-      const { error } = await supabase.auth.signUp({
-        email: email.trim(),
+      const { data } = await axios.post(`${API_BASE}/api/auth/register`, {
+        username: fullName, // backend expects `username`
+        email,
         password,
-        options: {
-          data: {
-            full_name: fullName.trim(),
-          },
-          emailRedirectTo: `${window.location.origin}/`,
-        },
       });
 
-      if (error) {
-        if (error.message.includes("already registered")) {
-          toast({
-            variant: "destructive",
-            title: "Account exists",
-            description: "This email is already registered. Please sign in instead.",
-          });
-        } else {
-          toast({
-            variant: "destructive",
-            title: "Sign up failed",
-            description: error.message,
-          });
-        }
-        return;
+      if (data.success) {
+        localStorage.setItem("token", data.token);
+        toast({
+          title: "Success!",
+          description: "Account created successfully.",
+        });
+        navigate("/dashboard");
+      } else {
+        toast({
+          variant: "destructive",
+          title: "Sign up failed",
+          description: data.message || "Something went wrong.",
+        });
       }
-
-      toast({
-        title: "Success!",
-        description: "Account created successfully. Redirecting...",
-      });
-    } catch (error) {
+    } catch (err: any) {
       toast({
         variant: "destructive",
-        title: "Error",
-        description: "An unexpected error occurred",
+        title: "Sign up failed",
+        description: err?.response?.data?.message || "Server error",
       });
     } finally {
       setIsLoading(false);
     }
   };
 
+  // Handle Sign In
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!validateForm(false)) return;
-    
     setIsLoading(true);
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
+      const { data } = await axios.post(`${API_BASE}/api/auth/login`, {
+        email,
         password,
       });
 
-      if (error) {
+      if (data.success) {
+        localStorage.setItem("token", data.token);
+        toast({
+          title: "Welcome back!",
+          description: "Login successful.",
+        });
+        navigate("/dashboard");
+      } else {
         toast({
           variant: "destructive",
-          title: "Sign in failed",
-          description: error.message === "Invalid login credentials" 
-            ? "Invalid email or password. Please try again."
-            : error.message,
+          title: "Login failed",
+          description: data.message || "Invalid credentials",
         });
-        return;
       }
-
-      toast({
-        title: "Welcome back!",
-        description: "Signed in successfully.",
-      });
-    } catch (error) {
+    } catch (err: any) {
       toast({
         variant: "destructive",
-        title: "Error",
-        description: "An unexpected error occurred",
+        title: "Login failed",
+        description: err?.response?.data?.message || "Server error",
       });
     } finally {
       setIsLoading(false);
@@ -167,6 +154,7 @@ const Auth = () => {
             </div>
             <span className="text-2xl font-bold">AI Code Reviewer</span>
           </div>
+
           <div>
             <CardTitle className="text-2xl text-center">Welcome</CardTitle>
             <CardDescription className="text-center">
@@ -174,19 +162,20 @@ const Auth = () => {
             </CardDescription>
           </div>
         </CardHeader>
+
         <CardContent>
           <Tabs defaultValue="signin" className="w-full">
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="signin">Sign In</TabsTrigger>
               <TabsTrigger value="signup">Sign Up</TabsTrigger>
             </TabsList>
-            
+
+            {/* SIGN IN FORM */}
             <TabsContent value="signin">
               <form onSubmit={handleSignIn} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="signin-email">Email</Label>
+                  <Label>Email</Label>
                   <Input
-                    id="signin-email"
                     type="email"
                     placeholder="you@example.com"
                     value={email}
@@ -195,10 +184,10 @@ const Auth = () => {
                     required
                   />
                 </div>
+
                 <div className="space-y-2">
-                  <Label htmlFor="signin-password">Password</Label>
+                  <Label>Password</Label>
                   <Input
-                    id="signin-password"
                     type="password"
                     placeholder="••••••••"
                     value={password}
@@ -207,6 +196,7 @@ const Auth = () => {
                     required
                   />
                 </div>
+
                 <Button type="submit" className="w-full" disabled={isLoading}>
                   {isLoading ? (
                     <>
@@ -219,13 +209,13 @@ const Auth = () => {
                 </Button>
               </form>
             </TabsContent>
-            
+
+            {/* SIGN UP FORM */}
             <TabsContent value="signup">
               <form onSubmit={handleSignUp} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="signup-name">Full Name</Label>
+                  <Label>Full Name</Label>
                   <Input
-                    id="signup-name"
                     type="text"
                     placeholder="John Doe"
                     value={fullName}
@@ -234,10 +224,10 @@ const Auth = () => {
                     required
                   />
                 </div>
+
                 <div className="space-y-2">
-                  <Label htmlFor="signup-email">Email</Label>
+                  <Label>Email</Label>
                   <Input
-                    id="signup-email"
                     type="email"
                     placeholder="you@example.com"
                     value={email}
@@ -246,10 +236,10 @@ const Auth = () => {
                     required
                   />
                 </div>
+
                 <div className="space-y-2">
-                  <Label htmlFor="signup-password">Password</Label>
+                  <Label>Password</Label>
                   <Input
-                    id="signup-password"
                     type="password"
                     placeholder="••••••••"
                     value={password}
@@ -261,6 +251,7 @@ const Auth = () => {
                     Password must be at least 6 characters
                   </p>
                 </div>
+
                 <Button type="submit" className="w-full" disabled={isLoading}>
                   {isLoading ? (
                     <>

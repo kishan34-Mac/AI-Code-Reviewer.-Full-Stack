@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,94 +7,134 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { User, Session } from "@supabase/supabase-js";
 import { Loader2 } from "lucide-react";
+import axios from "axios";
+
+const API_BASE = "http://localhost:4000";
+
+interface ProfileData {
+  email: string;
+  fullName: string;
+}
 
 const Profile = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
+
+  const [isAuthed, setIsAuthed] = useState(false);
+  const [profile, setProfile] = useState<ProfileData | null>(null);
   const [fullName, setFullName] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
+  // Auth guard
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-        if (!session) {
-          navigate("/auth");
-        }
-      }
-    );
-
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (!session) {
-        navigate("/auth");
-      }
-    });
-
-    return () => subscription.unsubscribe();
+    const token = localStorage.getItem("token");
+    if (!token) {
+      navigate("/auth");
+    } else {
+      setIsAuthed(true);
+    }
   }, [navigate]);
 
+  // Fetch profile from your backend
   useEffect(() => {
-    if (user) {
-      fetchProfile();
-    }
-  }, [user]);
+    if (!isAuthed) return;
 
-  const fetchProfile = async () => {
-    if (!user) return;
+    const fetchProfile = async () => {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        navigate("/auth");
+        return;
+      }
 
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("full_name")
-      .eq("id", user.id)
-      .single();
+      setIsLoading(true);
+      try {
+        const { data } = await axios.get(`${API_BASE}/api/profile`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
 
-    if (error) {
-      console.error("Error fetching profile:", error);
-      return;
-    }
+        if (!data.success) {
+          toast({
+            variant: "destructive",
+            title: "Error",
+            description: data.message || "Failed to load profile",
+          });
+          return;
+        }
 
-    setFullName(data?.full_name || "");
-  };
+        const p: ProfileData = {
+          email: data.user.email,
+          fullName: data.user.fullName || "",
+        };
+        setProfile(p);
+        setFullName(p.fullName);
+      } catch (error: any) {
+        console.error("Error fetching profile:", error);
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description:
+            error?.response?.data?.message || "Failed to load profile",
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchProfile();
+  }, [isAuthed, navigate, toast]);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!user) return;
+
+    const token = localStorage.getItem("token");
+    if (!token) {
+      navigate("/auth");
+      return;
+    }
 
     setIsSaving(true);
-
     try {
-      const { error } = await supabase
-        .from("profiles")
-        .update({ full_name: fullName.trim() })
-        .eq("id", user.id);
+      const { data } = await axios.put(
+        `${API_BASE}/api/profile`,
+        { fullName: fullName.trim() },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
 
-      if (error) throw error;
+      if (!data.success) {
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: data.message || "Failed to update profile",
+        });
+        return;
+      }
 
       toast({
         title: "Success",
         description: "Profile updated successfully",
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error updating profile:", error);
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Failed to update profile",
+        description:
+          error?.response?.data?.message || "Failed to update profile",
       });
     } finally {
       setIsSaving(false);
     }
   };
 
-  if (!user || !session) {
+  if (!isAuthed || isLoading || !profile) {
     return null;
   }
 
@@ -122,7 +161,7 @@ const Profile = () => {
                     <Input
                       id="email"
                       type="email"
-                      value={user.email || ""}
+                      value={profile.email}
                       disabled
                     />
                     <p className="text-xs text-muted-foreground">

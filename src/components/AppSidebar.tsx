@@ -1,7 +1,6 @@
 import { Home, Code, FileText, User, LogOut } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation, useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
 import {
@@ -31,16 +30,15 @@ export function AppSidebar() {
   const { toast } = useToast();
 
   const handleSignOut = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) {
-      toast({
-        variant: "destructive",
-        title: "Error signing out",
-        description: error.message,
-      });
-    } else {
-      navigate("/");
-    }
+    // Clear JWT (and any other auth data) from localStorage
+    localStorage.removeItem("token");
+
+    toast({
+      title: "Signed out",
+      description: "You have been signed out.",
+    });
+
+    navigate("/auth");
   };
 
   return (
@@ -69,11 +67,14 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      
+
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton onClick={handleSignOut} className="hover:bg-destructive/10 hover:text-destructive">
+            <SidebarMenuButton
+              onClick={handleSignOut}
+              className="hover:bg-destructive/10 hover:text-destructive"
+            >
               <LogOut className="h-4 w-4" />
               <span>Sign Out</span>
             </SidebarMenuButton>

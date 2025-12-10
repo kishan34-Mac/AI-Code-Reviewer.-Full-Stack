@@ -1,19 +1,24 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, AlertCircle, CheckCircle, Shield, Zap } from "lucide-react";
 import Editor from "@monaco-editor/react";
-import { User, Session } from "@supabase/supabase-js";
+import axios from "axios";
 
 interface Bug {
   line?: number;
@@ -24,8 +29,16 @@ interface Bug {
 
 interface Analysis {
   bugs: Bug[];
-  security_issues: Array<{ severity: string; description: string; recommendation: string }>;
-  performance_issues: Array<{ description: string; impact: string; solution: string }>;
+  security_issues: Array<{
+    severity: string;
+    description: string;
+    recommendation: string;
+  }>;
+  performance_issues: Array<{
+    description: string;
+    impact: string;
+    solution: string;
+  }>;
   code_quality: {
     readability: number;
     maintainability: number;
@@ -38,37 +51,29 @@ interface Analysis {
   test_cases?: Array<{ name: string; input: string; expected: string }>;
 }
 
+const API_BASE = "http://localhost:4000";
+
 const CodeReview = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
+
+  // Just track whether user is authenticated via JWT token
+  const [isAuthed, setIsAuthed] = useState(false);
+
   const [code, setCode] = useState("");
   const [language, setLanguage] = useState("javascript");
   const [title, setTitle] = useState("");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
 
+  // Simple auth guard: check token in localStorage
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-        if (!session) {
-          navigate("/auth");
-        }
-      }
-    );
-
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (!session) {
-        navigate("/auth");
-      }
-    });
-
-    return () => subscription.unsubscribe();
+    const token = localStorage.getItem("token");
+    if (!token) {
+      navigate("/auth");
+    } else {
+      setIsAuthed(true);
+    }
   }, [navigate]);
 
   const handleAnalyze = async () => {
@@ -90,61 +95,60 @@ const CodeReview = () => {
       return;
     }
 
+    const token = localStorage.getItem("token");
+    if (!token) {
+      toast({
+        variant: "destructive",
+        title: "Not authenticated",
+        description: "Please log in again.",
+      });
+      navigate("/auth");
+      return;
+    }
+
     setIsAnalyzing(true);
     setAnalysis(null);
 
     try {
-      const { data, error } = await supabase.functions.invoke("analyze-code", {
-        body: { code, language },
-      });
-
-      if (error) {
-        if (error.message.includes("429")) {
-          toast({
-            variant: "destructive",
-            title: "Rate Limit Exceeded",
-            description: "Too many requests. Please try again in a few moments.",
-          });
-        } else if (error.message.includes("402")) {
-          toast({
-            variant: "destructive",
-            title: "Credits Required",
-            description: "Please add credits to your workspace to continue.",
-          });
-        } else {
-          throw error;
+      // Call your own backend API for analysis
+      const { data } = await axios.post(
+        `${API_BASE}/api/code/analyze`,
+        {
+          title: title.trim(),
+          code,
+          language,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
         }
+      );
+
+      // Expect backend to return { success, analysis, message? }
+      if (!data.success) {
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: data.message || "Failed to analyze code",
+        });
         return;
       }
 
       setAnalysis(data.analysis);
 
-      // Save to database
-      if (user) {
-        const { error: saveError } = await supabase.from("code_reviews").insert({
-          user_id: user.id,
-          title: title.trim(),
-          language,
-          original_code: code,
-          analysis: data.analysis,
-          quality_score: data.analysis.overall_score,
-        });
-
-        if (saveError) {
-          console.error("Error saving review:", saveError);
-        } else {
-          toast({
-            title: "Success",
-            description: "Review saved successfully!",
-          });
-        }
-      }
-    } catch (error) {
+      toast({
+        title: "Success",
+        description: "Code analyzed successfully!",
+      });
+    } catch (error: any) {
       console.error("Error analyzing code:", error);
       toast({
         variant: "destructive",
         title: "Error",
-        description: error instanceof Error ? error.message : "Failed to analyze code",
+        description:
+          error?.response?.data?.message ||
+          (error instanceof Error ? error.message : "Failed to analyze code"),
       });
     } finally {
       setIsAnalyzing(false);
@@ -154,7 +158,6 @@ const CodeReview = () => {
   const getSeverityColor = (severity: string) => {
     switch (severity.toLowerCase()) {
       case "critical":
-        return "destructive";
       case "high":
         return "destructive";
       case "medium":
@@ -166,7 +169,8 @@ const CodeReview = () => {
     }
   };
 
-  if (!user || !session) {
+  // While checking token or redirecting, render nothing
+  if (!isAuthed) {
     return null;
   }
 
@@ -235,7 +239,11 @@ const CodeReview = () => {
                       </div>
                     </div>
 
-                    <Button onClick={handleAnalyze} disabled={isAnalyzing} className="w-full">
+                    <Button
+                      onClick={handleAnalyze}
+                      disabled={isAnalyzing}
+                      className="w-full"
+                    >
                       {isAnalyzing ? (
                         <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -254,7 +262,8 @@ const CodeReview = () => {
                 {!analysis && !isAnalyzing && (
                   <Card className="p-8 text-center">
                     <p className="text-muted-foreground">
-                      Enter your code and click "Analyze Code" to get started
+                      Enter your code and click &quot;Analyze Code&quot; to get
+                      started
                     </p>
                   </Card>
                 )}
@@ -262,7 +271,9 @@ const CodeReview = () => {
                 {isAnalyzing && (
                   <Card className="p-8 text-center">
                     <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
-                    <p className="text-muted-foreground">Analyzing your code...</p>
+                    <p className="text-muted-foreground">
+                      Analyzing your code...
+                    </p>
                   </Card>
                 )}
 
@@ -274,8 +285,12 @@ const CodeReview = () => {
                         <h3 className="text-sm font-medium text-muted-foreground mb-2">
                           Overall Quality Score
                         </h3>
-                        <div className="text-5xl font-bold mb-2">{analysis.overall_score}</div>
-                        <p className="text-sm text-muted-foreground">out of 100</p>
+                        <div className="text-5xl font-bold mb-2">
+                          {analysis.overall_score}
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          out of 100
+                        </p>
                       </div>
 
                       <Separator className="my-4" />
@@ -283,19 +298,27 @@ const CodeReview = () => {
                       <div className="grid grid-cols-2 gap-4 text-sm">
                         <div>
                           <div className="font-medium">Readability</div>
-                          <div className="text-muted-foreground">{analysis.code_quality.readability}/10</div>
+                          <div className="text-muted-foreground">
+                            {analysis.code_quality.readability}/10
+                          </div>
                         </div>
                         <div>
                           <div className="font-medium">Maintainability</div>
-                          <div className="text-muted-foreground">{analysis.code_quality.maintainability}/10</div>
+                          <div className="text-muted-foreground">
+                            {analysis.code_quality.maintainability}/10
+                          </div>
                         </div>
                         <div>
                           <div className="font-medium">Security</div>
-                          <div className="text-muted-foreground">{analysis.code_quality.security}/10</div>
+                          <div className="text-muted-foreground">
+                            {analysis.code_quality.security}/10
+                          </div>
                         </div>
                         <div>
                           <div className="font-medium">Performance</div>
-                          <div className="text-muted-foreground">{analysis.code_quality.performance}/10</div>
+                          <div className="text-muted-foreground">
+                            {analysis.code_quality.performance}/10
+                          </div>
                         </div>
                       </div>
                     </Card>
@@ -305,20 +328,33 @@ const CodeReview = () => {
                       <Card className="p-6">
                         <div className="flex items-center gap-2 mb-4">
                           <AlertCircle className="h-5 w-5 text-destructive" />
-                          <h3 className="font-semibold">Bugs Found ({analysis.bugs.length})</h3>
+                          <h3 className="font-semibold">
+                            Bugs Found ({analysis.bugs.length})
+                          </h3>
                         </div>
                         <div className="space-y-4">
                           {analysis.bugs.map((bug, idx) => (
-                            <div key={idx} className="border border-border rounded-lg p-4">
+                            <div
+                              key={idx}
+                              className="border border-border rounded-lg p-4"
+                            >
                               <div className="flex items-start justify-between mb-2">
                                 <Badge variant={getSeverityColor(bug.severity)}>
                                   {bug.severity}
                                 </Badge>
-                                {bug.line && <span className="text-sm text-muted-foreground">Line {bug.line}</span>}
+                                {bug.line && (
+                                  <span className="text-sm text-muted-foreground">
+                                    Line {bug.line}
+                                  </span>
+                                )}
                               </div>
-                              <p className="text-sm mb-2">{bug.description}</p>
+                              <p className="text-sm mb-2">
+                                {bug.description}
+                              </p>
                               <div className="bg-muted/50 rounded p-2 text-sm">
-                                <div className="font-medium mb-1 text-xs text-muted-foreground">Suggested Fix:</div>
+                                <div className="font-medium mb-1 text-xs text-muted-foreground">
+                                  Suggested Fix:
+                                </div>
                                 {bug.fix}
                               </div>
                             </div>
@@ -328,73 +364,103 @@ const CodeReview = () => {
                     )}
 
                     {/* Security Issues */}
-                    {analysis.security_issues && analysis.security_issues.length > 0 && (
-                      <Card className="p-6">
-                        <div className="flex items-center gap-2 mb-4">
-                          <Shield className="h-5 w-5 text-accent" />
-                          <h3 className="font-semibold">Security Issues ({analysis.security_issues.length})</h3>
-                        </div>
-                        <div className="space-y-4">
-                          {analysis.security_issues.map((issue, idx) => (
-                            <div key={idx} className="border border-border rounded-lg p-4">
-                              <Badge variant={getSeverityColor(issue.severity)} className="mb-2">
-                                {issue.severity}
-                              </Badge>
-                              <p className="text-sm mb-2">{issue.description}</p>
-                              <div className="bg-muted/50 rounded p-2 text-sm">
-                                <div className="font-medium mb-1 text-xs text-muted-foreground">Recommendation:</div>
-                                {issue.recommendation}
+                    {analysis.security_issues &&
+                      analysis.security_issues.length > 0 && (
+                        <Card className="p-6">
+                          <div className="flex items-center gap-2 mb-4">
+                            <Shield className="h-5 w-5 text-accent" />
+                            <h3 className="font-semibold">
+                              Security Issues (
+                              {analysis.security_issues.length})
+                            </h3>
+                          </div>
+                          <div className="space-y-4">
+                            {analysis.security_issues.map((issue, idx) => (
+                              <div
+                                key={idx}
+                                className="border border-border rounded-lg p-4"
+                              >
+                                <Badge
+                                  variant={getSeverityColor(issue.severity)}
+                                  className="mb-2"
+                                >
+                                  {issue.severity}
+                                </Badge>
+                                <p className="text-sm mb-2">
+                                  {issue.description}
+                                </p>
+                                <div className="bg-muted/50 rounded p-2 text-sm">
+                                  <div className="font-medium mb-1 text-xs text-muted-foreground">
+                                    Recommendation:
+                                  </div>
+                                  {issue.recommendation}
+                                </div>
                               </div>
-                            </div>
-                          ))}
-                        </div>
-                      </Card>
-                    )}
+                            ))}
+                          </div>
+                        </Card>
+                      )}
 
                     {/* Performance Issues */}
-                    {analysis.performance_issues && analysis.performance_issues.length > 0 && (
-                      <Card className="p-6">
-                        <div className="flex items-center gap-2 mb-4">
-                          <Zap className="h-5 w-5 text-primary" />
-                          <h3 className="font-semibold">Performance Issues ({analysis.performance_issues.length})</h3>
-                        </div>
-                        <div className="space-y-4">
-                          {analysis.performance_issues.map((issue, idx) => (
-                            <div key={idx} className="border border-border rounded-lg p-4">
-                              <p className="text-sm font-medium mb-1">{issue.description}</p>
-                              <p className="text-sm text-muted-foreground mb-2">Impact: {issue.impact}</p>
-                              <div className="bg-muted/50 rounded p-2 text-sm">
-                                <div className="font-medium mb-1 text-xs text-muted-foreground">Solution:</div>
-                                {issue.solution}
+                    {analysis.performance_issues &&
+                      analysis.performance_issues.length > 0 && (
+                        <Card className="p-6">
+                          <div className="flex items-center gap-2 mb-4">
+                            <Zap className="h-5 w-5 text-primary" />
+                            <h3 className="font-semibold">
+                              Performance Issues (
+                              {analysis.performance_issues.length})
+                            </h3>
+                          </div>
+                          <div className="space-y-4">
+                            {analysis.performance_issues.map((issue, idx) => (
+                              <div
+                                key={idx}
+                                className="border border-border rounded-lg p-4"
+                              >
+                                <p className="text-sm font-medium mb-1">
+                                  {issue.description}
+                                </p>
+                                <p className="text-sm text-muted-foreground mb-2">
+                                  Impact: {issue.impact}
+                                </p>
+                                <div className="bg-muted/50 rounded p-2 text-sm">
+                                  <div className="font-medium mb-1 text-xs text-muted-foreground">
+                                    Solution:
+                                  </div>
+                                  {issue.solution}
+                                </div>
                               </div>
-                            </div>
-                          ))}
-                        </div>
-                      </Card>
-                    )}
+                            ))}
+                          </div>
+                        </Card>
+                      )}
 
                     {/* Suggestions */}
-                    {analysis.suggestions && analysis.suggestions.length > 0 && (
-                      <Card className="p-6">
-                        <div className="flex items-center gap-2 mb-4">
-                          <CheckCircle className="h-5 w-5 text-primary" />
-                          <h3 className="font-semibold">Suggestions</h3>
-                        </div>
-                        <ul className="space-y-2">
-                          {analysis.suggestions.map((suggestion, idx) => (
-                            <li key={idx} className="text-sm flex gap-2">
-                              <span className="text-primary">•</span>
-                              <span>{suggestion}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </Card>
-                    )}
+                    {analysis.suggestions &&
+                      analysis.suggestions.length > 0 && (
+                        <Card className="p-6">
+                          <div className="flex items-center gap-2 mb-4">
+                            <CheckCircle className="h-5 w-5 text-primary" />
+                            <h3 className="font-semibold">Suggestions</h3>
+                          </div>
+                          <ul className="space-y-2">
+                            {analysis.suggestions.map((suggestion, idx) => (
+                              <li key={idx} className="text-sm flex gap-2">
+                                <span className="text-primary">•</span>
+                                <span>{suggestion}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </Card>
+                      )}
 
                     {/* Refactored Code */}
                     {analysis.refactored_code && (
                       <Card className="p-6">
-                        <h3 className="font-semibold mb-4">Refactored Code</h3>
+                        <h3 className="font-semibold mb-4">
+                          Refactored Code
+                        </h3>
                         <div className="border border-border rounded-lg overflow-hidden">
                           <Editor
                             height="300px"

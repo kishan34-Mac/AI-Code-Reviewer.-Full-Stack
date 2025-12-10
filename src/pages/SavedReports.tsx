@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,8 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { FileText, Calendar, Code, Loader2, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { User, Session } from "@supabase/supabase-js";
 import { format } from "date-fns";
+import axios from "axios";
 
 interface CodeReview {
   id: string;
@@ -20,62 +19,66 @@ interface CodeReview {
   analysis: any;
 }
 
+const API_BASE = "http://localhost:4000";
+
 const SavedReports = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
+
+  const [isAuthed, setIsAuthed] = useState(false);
   const [reviews, setReviews] = useState<CodeReview[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
+  // Simple auth guard via JWT in localStorage
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-        if (!session) {
-          navigate("/auth");
-        }
-      }
-    );
-
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (!session) {
-        navigate("/auth");
-      }
-    });
-
-    return () => subscription.unsubscribe();
+    const token = localStorage.getItem("token");
+    if (!token) {
+      navigate("/auth");
+    } else {
+      setIsAuthed(true);
+    }
   }, [navigate]);
 
   useEffect(() => {
-    if (user) {
+    if (isAuthed) {
       fetchReviews();
     }
-  }, [user]);
+  }, [isAuthed]);
 
   const fetchReviews = async () => {
-    if (!user) return;
+    const token = localStorage.getItem("token");
+    if (!token) {
+      navigate("/auth");
+      return;
+    }
 
     setIsLoading(true);
     try {
-      const { data, error } = await supabase
-        .from("code_reviews")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false });
+      const { data } = await axios.get(`${API_BASE}/api/reviews`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
-      if (error) throw error;
-      setReviews(data || []);
-    } catch (error) {
+      // Expect backend to return { success, reviews }
+      if (!data.success) {
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: data.message || "Failed to load reviews",
+        });
+        return;
+      }
+
+      setReviews(data.reviews || []);
+    } catch (error: any) {
       console.error("Error fetching reviews:", error);
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Failed to load reviews",
+        description:
+          error?.response?.data?.message || "Failed to load reviews",
       });
     } finally {
       setIsLoading(false);
@@ -83,26 +86,41 @@ const SavedReports = () => {
   };
 
   const handleDelete = async (id: string) => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      navigate("/auth");
+      return;
+    }
+
     setDeletingId(id);
     try {
-      const { error } = await supabase
-        .from("code_reviews")
-        .delete()
-        .eq("id", id);
+      const { data } = await axios.delete(`${API_BASE}/api/reviews/${id}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
-      if (error) throw error;
+      if (!data.success) {
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: data.message || "Failed to delete review",
+        });
+        return;
+      }
 
       toast({
         title: "Success",
         description: "Review deleted successfully",
       });
       fetchReviews();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error deleting review:", error);
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Failed to delete review",
+        description:
+          error?.response?.data?.message || "Failed to delete review",
       });
     } finally {
       setDeletingId(null);
@@ -115,7 +133,7 @@ const SavedReports = () => {
     return "text-red-500";
   };
 
-  if (!user || !session) {
+  if (!isAuthed) {
     return null;
   }
 
@@ -142,22 +160,35 @@ const SavedReports = () => {
                 <p className="text-muted-foreground mb-4">
                   Start by reviewing your first code
                 </p>
-                <Button onClick={() => navigate("/review")}>Review Code</Button>
+                <Button onClick={() => navigate("/review")}>
+                  Review Code
+                </Button>
               </Card>
             ) : (
               <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {reviews.map((review) => (
-                  <Card key={review.id} className="hover:shadow-lg transition-shadow">
+                  <Card
+                    key={review.id}
+                    className="hover:shadow-lg transition-shadow"
+                  >
                     <CardHeader>
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
-                          <CardTitle className="text-lg mb-2">{review.title}</CardTitle>
+                          <CardTitle className="text-lg mb-2">
+                            {review.title}
+                          </CardTitle>
                           <div className="flex items-center gap-2 text-sm text-muted-foreground">
                             <Code className="h-4 w-4" />
-                            <span className="capitalize">{review.language}</span>
+                            <span className="capitalize">
+                              {review.language}
+                            </span>
                           </div>
                         </div>
-                        <div className={`text-3xl font-bold ${getScoreColor(review.quality_score)}`}>
+                        <div
+                          className={`text-3xl font-bold ${getScoreColor(
+                            review.quality_score
+                          )}`}
+                        >
                           {review.quality_score}
                         </div>
                       </div>
@@ -165,7 +196,12 @@ const SavedReports = () => {
                     <CardContent>
                       <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
                         <Calendar className="h-4 w-4" />
-                        <span>{format(new Date(review.created_at), "MMM d, yyyy")}</span>
+                        <span>
+                          {format(
+                            new Date(review.created_at),
+                            "MMM d, yyyy"
+                          )}
+                        </span>
                       </div>
 
                       <div className="flex gap-2 mb-4">
@@ -182,11 +218,13 @@ const SavedReports = () => {
                       </div>
 
                       <div className="flex gap-2">
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
+                        <Button
+                          variant="outline"
+                          size="sm"
                           className="flex-1"
-                          onClick={() => navigate(`/review?id=${review.id}`)}
+                          onClick={() =>
+                            navigate(`/review?id=${review.id}`)
+                          }
                         >
                           View Details
                         </Button>
