@@ -16,7 +16,6 @@ import { Code, Loader2 } from "lucide-react";
 import { z } from "zod";
 import axios from "axios";
 
-// point to your backend
 const API_BASE = "http://localhost:4000";
 
 // Validation schemas
@@ -29,15 +28,16 @@ const Auth = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  const [isLoading, setIsLoading] = useState(false);
+  const [isSigningIn, setIsSigningIn] = useState(false);
+  const [isSigningUp, setIsSigningUp] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
 
-  // Redirect if token exists
+  // Redirect if token already exists
   useEffect(() => {
     const token = localStorage.getItem("token");
-    if (token) navigate("/dashboard");
+    if (token) navigate("/dashboard", { replace: true });
   }, [navigate]);
 
   // Validate user input
@@ -53,13 +53,13 @@ const Auth = () => {
       if (error instanceof z.ZodError) {
         toast({
           variant: "destructive",
-          title: "Validation Error",
+          title: "Validation error",
           description: error.errors[0].message,
         });
       } else if (error instanceof Error) {
         toast({
           variant: "destructive",
-          title: "Validation Error",
+          title: "Validation error",
           description: error.message,
         });
       }
@@ -70,24 +70,25 @@ const Auth = () => {
   // Handle Sign Up
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
-
     if (!validateForm(true)) return;
-    setIsLoading(true);
+
+    setIsSigningUp(true);
 
     try {
       const { data } = await axios.post(`${API_BASE}/api/auth/register`, {
-        username: fullName, // backend expects `username`
+        username: fullName, // backend expects username
         email,
         password,
       });
 
-      if (data.success) {
+      if (data.success && data.token) {
         localStorage.setItem("token", data.token);
+        localStorage.setItem("email", email);
         toast({
           title: "Success!",
           description: "Account created successfully.",
         });
-        navigate("/dashboard");
+        navigate("/dashboard", { replace: true });
       } else {
         toast({
           variant: "destructive",
@@ -102,16 +103,16 @@ const Auth = () => {
         description: err?.response?.data?.message || "Server error",
       });
     } finally {
-      setIsLoading(false);
+      setIsSigningUp(false);
     }
   };
 
   // Handle Sign In
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
-
     if (!validateForm(false)) return;
-    setIsLoading(true);
+
+    setIsSigningIn(true);
 
     try {
       const { data } = await axios.post(`${API_BASE}/api/auth/login`, {
@@ -119,13 +120,14 @@ const Auth = () => {
         password,
       });
 
-      if (data.success) {
+      if (data.success && data.token) {
         localStorage.setItem("token", data.token);
+        localStorage.setItem("email", email);
         toast({
           title: "Welcome back!",
           description: "Login successful.",
         });
-        navigate("/dashboard");
+        navigate("/dashboard", { replace: true });
       } else {
         toast({
           variant: "destructive",
@@ -140,7 +142,7 @@ const Auth = () => {
         description: err?.response?.data?.message || "Server error",
       });
     } finally {
-      setIsLoading(false);
+      setIsSigningIn(false);
     }
   };
 
@@ -180,7 +182,7 @@ const Auth = () => {
                     placeholder="you@example.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    disabled={isLoading}
+                    disabled={isSigningIn || isSigningUp}
                     required
                   />
                 </div>
@@ -192,13 +194,17 @@ const Auth = () => {
                     placeholder="••••••••"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    disabled={isLoading}
+                    disabled={isSigningIn || isSigningUp}
                     required
                   />
                 </div>
 
-                <Button type="submit" className="w-full" disabled={isLoading}>
-                  {isLoading ? (
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={isSigningIn || isSigningUp}
+                >
+                  {isSigningIn ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       Signing in...
@@ -220,7 +226,7 @@ const Auth = () => {
                     placeholder="John Doe"
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
-                    disabled={isLoading}
+                    disabled={isSigningIn || isSigningUp}
                     required
                   />
                 </div>
@@ -232,7 +238,7 @@ const Auth = () => {
                     placeholder="you@example.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    disabled={isLoading}
+                    disabled={isSigningIn || isSigningUp}
                     required
                   />
                 </div>
@@ -244,7 +250,7 @@ const Auth = () => {
                     placeholder="••••••••"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    disabled={isLoading}
+                    disabled={isSigningIn || isSigningUp}
                     required
                   />
                   <p className="text-xs text-muted-foreground">
@@ -252,8 +258,12 @@ const Auth = () => {
                   </p>
                 </div>
 
-                <Button type="submit" className="w-full" disabled={isLoading}>
-                  {isLoading ? (
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={isSigningIn || isSigningUp}
+                >
+                  {isSigningUp ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       Creating account...

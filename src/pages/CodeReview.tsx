@@ -57,16 +57,13 @@ const CodeReview = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  // Just track whether user is authenticated via JWT token
   const [isAuthed, setIsAuthed] = useState(false);
-
   const [code, setCode] = useState("");
   const [language, setLanguage] = useState("javascript");
   const [title, setTitle] = useState("");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
 
-  // Simple auth guard: check token in localStorage
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (!token) {
@@ -110,7 +107,6 @@ const CodeReview = () => {
     setAnalysis(null);
 
     try {
-      // Call your own backend API for analysis
       const { data } = await axios.post(
         `${API_BASE}/api/code/analyze`,
         {
@@ -125,8 +121,9 @@ const CodeReview = () => {
         }
       );
 
-      // Expect backend to return { success, analysis, message? }
-      if (!data.success) {
+      console.log("analysis response:", data);
+
+      if (!data.success || !data.analysis) {
         toast({
           variant: "destructive",
           title: "Error",
@@ -169,7 +166,6 @@ const CodeReview = () => {
     }
   };
 
-  // While checking token or redirecting, render nothing
   if (!isAuthed) {
     return null;
   }
