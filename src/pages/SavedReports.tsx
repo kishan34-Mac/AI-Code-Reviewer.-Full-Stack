@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { FileText, Calendar, Code, Loader2, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
+import { API_BASE } from "@/lib/api";
+
 import axios from "axios";
 
 interface CodeReview {
@@ -19,7 +21,7 @@ interface CodeReview {
   analysis: any;
 }
 
-const API_BASE = "http://localhost:4000";
+
 
 const SavedReports = () => {
   const navigate = useNavigate();

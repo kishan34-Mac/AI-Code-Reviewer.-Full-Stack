@@ -3,7 +3,9 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import axios from "axios";
+import { API_BASE } from "@/lib/api";
+
+ 
 import {
   Card,
   CardContent,
@@ -17,7 +19,7 @@ import { Code, Loader2 } from "lucide-react";
 import { z } from "zod";
 import axios from "axios";
 
-const API_BASE = "http://localhost:4000";
+
 
 // Validation schemas
 const emailSchema = z.string().email("Invalid email address");

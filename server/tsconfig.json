@@ -2,8 +2,8 @@
   "compilerOptions": {
     "target": "es2020",
 
-    "module": "node16",
-    "moduleResolution": "node16",
+    "module": "commonjs",
+    "moduleResolution": "node",
 
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
@@ -12,11 +12,13 @@
     "skipLibCheck": true,
 
     "sourceMap": true,
-    "declaration": true,
-    "declarationMap": true,
+    "declaration": false,
+    "declarationMap": false,
 
     "noUncheckedIndexedAccess": true,
-    "exactOptionalPropertyTypes": true
+    "exactOptionalPropertyTypes": true,
+
+    "outDir": "dist"
   },
   "include": ["src"]
 }

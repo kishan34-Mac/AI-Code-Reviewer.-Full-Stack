@@ -8,9 +8,11 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
+import { API_BASE } from "@/lib/api";
+
 import axios from "axios";
 
-const API_BASE = "http://localhost:4000";
+
 
 interface ProfileData {
   email: string;

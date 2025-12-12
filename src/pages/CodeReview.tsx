@@ -6,11 +6,14 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { API_BASE } from "@/lib/api";
+
 import axios from "axios";
+
 import {
   Select,
   SelectContent,
-  SelectItem,
+  SelectItem,x
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -19,7 +22,6 @@ import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, AlertCircle, CheckCircle, Shield, Zap } from "lucide-react";
 import Editor from "@monaco-editor/react";
-import axios from "axios";
 
 interface Bug {
   line?: number;
@@ -51,8 +53,6 @@ interface Analysis {
   refactored_code: string;
   test_cases?: Array<{ name: string; input: string; expected: string }>;
 }
-
-const API_BASE = "http://localhost:4000";
 
 const CodeReview = () => {
   const navigate = useNavigate();
