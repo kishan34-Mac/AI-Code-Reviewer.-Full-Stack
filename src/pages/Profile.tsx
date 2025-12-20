@@ -16,7 +16,7 @@ import axios from "axios";
 
 interface ProfileData {
   email: string;
-  fullName: string;
+  name: string;
 }
 
 const Profile = () => {
@@ -25,7 +25,7 @@ const Profile = () => {
 
   const [isAuthed, setIsAuthed] = useState(false);
   const [profile, setProfile] = useState<ProfileData | null>(null);
-  const [fullName, setFullName] = useState("");
+  const [name, setname] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -69,10 +69,10 @@ const Profile = () => {
 
         const p: ProfileData = {
           email: data.user.email,
-          fullName: data.user.fullName || "",
+          name: data.user.name || "",
         };
         setProfile(p);
-        setFullName(p.fullName);
+        setname(p.name);
       } catch (error: any) {
         console.error("Error fetching profile:", error);
         toast({
@@ -102,7 +102,7 @@ const Profile = () => {
     try {
       const { data } = await axios.put(
         `${API_BASE}/api/profile`,
-        { fullName: fullName.trim() },
+        { name: name.trim() },
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -172,12 +172,12 @@ const Profile = () => {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="fullName">Full Name</Label>
+                    <Label htmlFor="name">Full Name</Label>
                     <Input
-                      id="fullName"
+                      id="name"
                       type="text"
-                      value={fullName}
-                      onChange={(e) => setFullName(e.target.value)}
+                      value={name}
+                      onChange={(e) => setname(e.target.value)}
                       placeholder="Enter your full name"
                     />
                   </div>

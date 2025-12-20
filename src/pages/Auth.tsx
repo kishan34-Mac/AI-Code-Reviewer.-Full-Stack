@@ -35,7 +35,7 @@ const Auth = () => {
   const [isSigningUp, setIsSigningUp] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [fullName, setFullName] = useState("");
+  const [name, setname] = useState("");
 
   // Redirect if token already exists
   useEffect(() => {
@@ -48,7 +48,7 @@ const Auth = () => {
     try {
       emailSchema.parse(email);
       passwordSchema.parse(password);
-      if (isSignup && !fullName.trim()) {
+      if (isSignup && !name.trim()) {
         throw new Error("Full name is required");
       }
       return true;
@@ -79,7 +79,7 @@ const Auth = () => {
 
     try {
       const { data } = await axios.post(`${API_BASE}/api/auth/register`, {
-        username: fullName, // backend expects username
+        name: name, // backend expects username
         email,
         password,
       });
@@ -227,8 +227,8 @@ const Auth = () => {
                   <Input
                     type="text"
                     placeholder="John Doe"
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
+                    value={name}
+                    onChange={(e) => setname(e.target.value)}
                     disabled={isSigningIn || isSigningUp}
                     required
                   />
