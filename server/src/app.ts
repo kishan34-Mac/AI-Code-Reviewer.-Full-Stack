@@ -17,6 +17,15 @@ app.use(express.json());
 app.use("/api/auth", authRoutes); // base path
 app.use("/api/reviews", reviewRoutes);
 app.use("/api/code", codeRoutes); // <-- important
+app.use(cors({
+  origin: [
+    'http://localhost:5173',
+    'http://localhost:8081',
+    'https://ai-code-reviewer-full-stack.vercel.app',  // Your actual Vercel URL
+    /\.vercel\.app$/
+  ],
+  credentials: true
+}));
  
 
 
