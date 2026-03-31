@@ -4,8 +4,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { API_BASE } from "@/lib/api";
-
- 
 import {
   Card,
   CardContent,
@@ -18,8 +16,6 @@ import { useToast } from "@/hooks/use-toast";
 import { Code, Loader2 } from "lucide-react";
 import { z } from "zod";
 import axios from "axios";
-
-
 
 // Validation schemas
 const emailSchema = z.string().email("Invalid email address");
@@ -35,7 +31,7 @@ const Auth = () => {
   const [isSigningUp, setIsSigningUp] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [name, setname] = useState("");
+  const [name, setName] = useState("");
 
   // Redirect if token already exists
   useEffect(() => {
@@ -79,7 +75,7 @@ const Auth = () => {
 
     try {
       const { data } = await axios.post(`${API_BASE}/api/auth/register`, {
-        name: name, // backend expects username
+        name,
         email,
         password,
       });
@@ -87,6 +83,7 @@ const Auth = () => {
       if (data.success && data.token) {
         localStorage.setItem("token", data.token);
         localStorage.setItem("email", email);
+        localStorage.setItem("userName", name);
         toast({
           title: "Success!",
           description: "Account created successfully.",
@@ -99,11 +96,14 @@ const Auth = () => {
           description: data.message || "Something went wrong.",
         });
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message = axios.isAxiosError(err)
+        ? err.response?.data?.message
+        : undefined;
       toast({
         variant: "destructive",
         title: "Sign up failed",
-        description: err?.response?.data?.message || "Server error",
+        description: message || "Server error",
       });
     } finally {
       setIsSigningUp(false);
@@ -126,6 +126,10 @@ const Auth = () => {
       if (data.success && data.token) {
         localStorage.setItem("token", data.token);
         localStorage.setItem("email", email);
+        // Store user name from login response
+        if (data.user?.name) {
+          localStorage.setItem("userName", data.user.name);
+        }
         toast({
           title: "Welcome back!",
           description: "Login successful.",
@@ -138,11 +142,14 @@ const Auth = () => {
           description: data.message || "Invalid credentials",
         });
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message = axios.isAxiosError(err)
+        ? err.response?.data?.message
+        : undefined;
       toast({
         variant: "destructive",
         title: "Login failed",
-        description: err?.response?.data?.message || "Server error",
+        description: message || "Server error",
       });
     } finally {
       setIsSigningIn(false);
@@ -194,7 +201,7 @@ const Auth = () => {
                   <Label>Password</Label>
                   <Input
                     type="password"
-                    placeholder="••••••••"
+                    placeholder="********"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     disabled={isSigningIn || isSigningUp}
@@ -228,7 +235,7 @@ const Auth = () => {
                     type="text"
                     placeholder="John Doe"
                     value={name}
-                    onChange={(e) => setname(e.target.value)}
+                    onChange={(e) => setName(e.target.value)}
                     disabled={isSigningIn || isSigningUp}
                     required
                   />
@@ -250,7 +257,7 @@ const Auth = () => {
                   <Label>Password</Label>
                   <Input
                     type="password"
-                    placeholder="••••••••"
+                    placeholder="********"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     disabled={isSigningIn || isSigningUp}

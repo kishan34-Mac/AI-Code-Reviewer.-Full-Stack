@@ -1,6 +1,6 @@
 import { Home, Code, FileText, User, LogOut } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 
 import {
@@ -13,7 +13,6 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarFooter,
-  useSidebar,
 } from "@/components/ui/sidebar";
 
 const menuItems = [
@@ -24,14 +23,13 @@ const menuItems = [
 ];
 
 export function AppSidebar() {
-  const { state } = useSidebar();
-  const location = useLocation();
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  const handleSignOut = async () => {
-    // Clear JWT (and any other auth data) from localStorage
+  const handleSignOut = () => {
     localStorage.removeItem("token");
+    localStorage.removeItem("email");
+    localStorage.removeItem("userName");
 
     toast({
       title: "Signed out",

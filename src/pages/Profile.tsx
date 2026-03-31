@@ -9,10 +9,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
 import { API_BASE } from "@/lib/api";
-
 import axios from "axios";
-
-
 
 interface ProfileData {
   email: string;
@@ -23,32 +20,16 @@ const Profile = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  const [isAuthed, setIsAuthed] = useState(false);
   const [profile, setProfile] = useState<ProfileData | null>(null);
-  const [name, setname] = useState("");
+  const [name, setName] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Auth guard
+  // Fetch profile from backend
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (!token) {
-      navigate("/auth");
-    } else {
-      setIsAuthed(true);
-    }
-  }, [navigate]);
-
-  // Fetch profile from your backend
-  useEffect(() => {
-    if (!isAuthed) return;
-
     const fetchProfile = async () => {
       const token = localStorage.getItem("token");
-      if (!token) {
-        navigate("/auth");
-        return;
-      }
+      if (!token) return;
 
       setIsLoading(true);
       try {
@@ -72,14 +53,16 @@ const Profile = () => {
           name: data.user.name || "",
         };
         setProfile(p);
-        setname(p.name);
-      } catch (error: any) {
+        setName(p.name);
+      } catch (error: unknown) {
         console.error("Error fetching profile:", error);
+        const message = axios.isAxiosError(error)
+          ? error.response?.data?.message
+          : undefined;
         toast({
           variant: "destructive",
           title: "Error",
-          description:
-            error?.response?.data?.message || "Failed to load profile",
+          description: message || "Failed to load profile",
         });
       } finally {
         setIsLoading(false);
@@ -87,7 +70,7 @@ const Profile = () => {
     };
 
     fetchProfile();
-  }, [isAuthed, navigate, toast]);
+  }, [toast]);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -107,7 +90,7 @@ const Profile = () => {
           headers: {
             Authorization: `Bearer ${token}`,
           },
-        }
+        },
       );
 
       if (!data.success) {
@@ -119,25 +102,39 @@ const Profile = () => {
         return;
       }
 
+      // Update localStorage so Dashboard shows updated name
+      localStorage.setItem("userName", name.trim());
+
       toast({
         title: "Success",
         description: "Profile updated successfully",
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error updating profile:", error);
+      const message = axios.isAxiosError(error)
+        ? error.response?.data?.message
+        : undefined;
       toast({
         variant: "destructive",
         title: "Error",
-        description:
-          error?.response?.data?.message || "Failed to update profile",
+        description: message || "Failed to update profile",
       });
     } finally {
       setIsSaving(false);
     }
   };
 
-  if (!isAuthed || isLoading || !profile) {
-    return null;
+  if (isLoading || !profile) {
+    return (
+      <SidebarProvider>
+        <div className="min-h-screen flex w-full bg-background">
+          <AppSidebar />
+          <main className="flex-1 flex items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </main>
+        </div>
+      </SidebarProvider>
+    );
   }
 
   return (
@@ -177,7 +174,7 @@ const Profile = () => {
                       id="name"
                       type="text"
                       value={name}
-                      onChange={(e) => setname(e.target.value)}
+                      onChange={(e) => setName(e.target.value)}
                       placeholder="Enter your full name"
                     />
                   </div>

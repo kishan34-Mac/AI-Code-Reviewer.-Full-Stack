@@ -6,10 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Code, FileText, TrendingUp, ArrowRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { API_BASE } from "@/lib/api";
 import axios from "axios";
-const API_BASE = "http://localhost:4000";
-
- 
 
 interface ReviewStats {
   reviewCount: number;
@@ -21,37 +19,24 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  const [isAuthed, setIsAuthed] = useState(false);
-  const [email, setEmail] = useState<string>("");
+  const [userName, setUserName] = useState<string>("");
   const [stats, setStats] = useState<ReviewStats>({
     reviewCount: 0,
     bugsFound: 0,
     avgQualityScore: null,
   });
 
-  // Auth guard – read token (and optionally email) from storage
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    const storedEmail = localStorage.getItem("email"); // set this at login if you want
-
-    if (!token) {
-      navigate("/auth");
-    } else {
-      setIsAuthed(true);
-      if (storedEmail) setEmail(storedEmail);
-    }
-  }, [navigate]);
+    const storedName = localStorage.getItem("userName");
+    const storedEmail = localStorage.getItem("email");
+    setUserName(storedName || storedEmail || "");
+  }, []);
 
   // Fetch stats from backend
   useEffect(() => {
-    if (!isAuthed) return;
-
     const fetchStats = async () => {
       const token = localStorage.getItem("token");
-      if (!token) {
-        navigate("/auth");
-        return;
-      }
+      if (!token) return;
 
       try {
         const { data } = await axios.get(`${API_BASE}/api/reviews/stats`, {
@@ -77,23 +62,21 @@ const Dashboard = () => {
               ? data.avgQualityScore
               : null,
         });
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error("Error fetching stats:", error);
+        const message = axios.isAxiosError(error)
+          ? error.response?.data?.message
+          : undefined;
         toast({
           variant: "destructive",
           title: "Error",
-          description:
-            error?.response?.data?.message || "Failed to load stats",
+          description: message || "Failed to load stats",
         });
       }
     };
 
     fetchStats();
-  }, [isAuthed, navigate, toast]);
-
-  if (!isAuthed) {
-    return null;
-  }
+  }, [toast]);
 
   return (
     <SidebarProvider>
@@ -106,7 +89,7 @@ const Dashboard = () => {
             <div>
               <h1 className="text-2xl font-bold">Dashboard</h1>
               <p className="text-sm text-muted-foreground">
-                Welcome back{email ? `, ${email}` : "" }
+                Welcome back{userName ? `, ${userName}` : ""}
               </p>
             </div>
           </header>
@@ -122,9 +105,7 @@ const Dashboard = () => {
                   <FileText className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">
-                    {stats.reviewCount}
-                  </div>
+                  <div className="text-2xl font-bold">{stats.reviewCount}</div>
                   <p className="text-xs text-muted-foreground">
                     Code reviews completed
                   </p>
@@ -161,9 +142,7 @@ const Dashboard = () => {
                       ? Math.round(stats.avgQualityScore)
                       : "-"}
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    Out of 100
-                  </p>
+                  <p className="text-xs text-muted-foreground">Out of 100</p>
                 </CardContent>
               </Card>
             </div>

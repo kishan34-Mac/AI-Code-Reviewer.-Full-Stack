@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
@@ -9,8 +9,12 @@ import { FileText, Calendar, Code, Loader2, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { API_BASE } from "@/lib/api";
-
 import axios from "axios";
+
+interface ReviewAnalysis {
+  bugs?: Array<{ severity: string; description: string }>;
+  security_issues?: Array<{ severity: string; description: string }>;
+}
 
 interface CodeReview {
   id: string;
@@ -18,42 +22,20 @@ interface CodeReview {
   language: string;
   quality_score: number;
   created_at: string;
-  analysis: any;
+  analysis: ReviewAnalysis;
 }
-
-
 
 const SavedReports = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  const [isAuthed, setIsAuthed] = useState(false);
   const [reviews, setReviews] = useState<CodeReview[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  // Simple auth guard via JWT in localStorage
-  useEffect(() => {
+  const fetchReviews = useCallback(async () => {
     const token = localStorage.getItem("token");
-    if (!token) {
-      navigate("/auth");
-    } else {
-      setIsAuthed(true);
-    }
-  }, [navigate]);
-
-  useEffect(() => {
-    if (isAuthed) {
-      fetchReviews();
-    }
-  }, [isAuthed]);
-
-  const fetchReviews = async () => {
-    const token = localStorage.getItem("token");
-    if (!token) {
-      navigate("/auth");
-      return;
-    }
+    if (!token) return;
 
     setIsLoading(true);
     try {
@@ -63,7 +45,6 @@ const SavedReports = () => {
         },
       });
 
-      // Expect backend to return { success, reviews }
       if (!data.success) {
         toast({
           variant: "destructive",
@@ -74,25 +55,28 @@ const SavedReports = () => {
       }
 
       setReviews(data.reviews || []);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error fetching reviews:", error);
+      const message = axios.isAxiosError(error)
+        ? error.response?.data?.message
+        : undefined;
       toast({
         variant: "destructive",
         title: "Error",
-        description:
-          error?.response?.data?.message || "Failed to load reviews",
+        description: message || "Failed to load reviews",
       });
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [toast]);
+
+  useEffect(() => {
+    fetchReviews();
+  }, [fetchReviews]);
 
   const handleDelete = async (id: string) => {
     const token = localStorage.getItem("token");
-    if (!token) {
-      navigate("/auth");
-      return;
-    }
+    if (!token) return;
 
     setDeletingId(id);
     try {
@@ -116,13 +100,15 @@ const SavedReports = () => {
         description: "Review deleted successfully",
       });
       fetchReviews();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error deleting review:", error);
+      const message = axios.isAxiosError(error)
+        ? error.response?.data?.message
+        : undefined;
       toast({
         variant: "destructive",
         title: "Error",
-        description:
-          error?.response?.data?.message || "Failed to delete review",
+        description: message || "Failed to delete review",
       });
     } finally {
       setDeletingId(null);
@@ -134,10 +120,6 @@ const SavedReports = () => {
     if (score >= 60) return "text-yellow-500";
     return "text-red-500";
   };
-
-  if (!isAuthed) {
-    return null;
-  }
 
   return (
     <SidebarProvider>
@@ -162,9 +144,7 @@ const SavedReports = () => {
                 <p className="text-muted-foreground mb-4">
                   Start by reviewing your first code
                 </p>
-                <Button onClick={() => navigate("/review")}>
-                  Review Code
-                </Button>
+                <Button onClick={() => navigate("/review")}>Review Code</Button>
               </Card>
             ) : (
               <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -188,7 +168,7 @@ const SavedReports = () => {
                         </div>
                         <div
                           className={`text-3xl font-bold ${getScoreColor(
-                            review.quality_score
+                            review.quality_score,
                           )}`}
                         >
                           {review.quality_score}
@@ -199,24 +179,23 @@ const SavedReports = () => {
                       <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
                         <Calendar className="h-4 w-4" />
                         <span>
-                          {format(
-                            new Date(review.created_at),
-                            "MMM d, yyyy"
-                          )}
+                          {format(new Date(review.created_at), "MMM d, yyyy")}
                         </span>
                       </div>
 
                       <div className="flex gap-2 mb-4">
-                        {review.analysis?.bugs?.length > 0 && (
-                          <Badge variant="destructive">
-                            {review.analysis.bugs.length} bugs
-                          </Badge>
-                        )}
-                        {review.analysis?.security_issues?.length > 0 && (
-                          <Badge variant="secondary">
-                            {review.analysis.security_issues.length} security
-                          </Badge>
-                        )}
+                        {review.analysis?.bugs &&
+                          review.analysis.bugs.length > 0 && (
+                            <Badge variant="destructive">
+                              {review.analysis.bugs.length} bugs
+                            </Badge>
+                          )}
+                        {review.analysis?.security_issues &&
+                          review.analysis.security_issues.length > 0 && (
+                            <Badge variant="secondary">
+                              {review.analysis.security_issues.length} security
+                            </Badge>
+                          )}
                       </div>
 
                       <div className="flex gap-2">
@@ -224,9 +203,7 @@ const SavedReports = () => {
                           variant="outline"
                           size="sm"
                           className="flex-1"
-                          onClick={() =>
-                            navigate(`/review?id=${review.id}`)
-                          }
+                          onClick={() => navigate(`/review?id=${review.id}`)}
                         >
                           View Details
                         </Button>

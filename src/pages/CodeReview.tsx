@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { Card } from "@/components/ui/card";
@@ -7,9 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { API_BASE } from "@/lib/api";
-
 import axios from "axios";
-
 import {
   Select,
   SelectContent,
@@ -54,25 +52,77 @@ interface Analysis {
   test_cases?: Array<{ name: string; input: string; expected: string }>;
 }
 
+interface SavedReviewResponse {
+  id: string;
+  title: string;
+  language: string;
+  analysis: Analysis;
+}
+
 const CodeReview = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { toast } = useToast();
 
-  const [isAuthed, setIsAuthed] = useState(false);
   const [code, setCode] = useState("");
   const [language, setLanguage] = useState("javascript");
   const [title, setTitle] = useState("");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isLoadingReview, setIsLoadingReview] = useState(false);
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
 
   useEffect(() => {
+    const reviewId = searchParams.get("id");
     const token = localStorage.getItem("token");
-    if (!token) {
-      navigate("/auth");
-    } else {
-      setIsAuthed(true);
+
+    if (!reviewId || !token) {
+      return;
     }
-  }, [navigate]);
+
+    const fetchReview = async () => {
+      setIsLoadingReview(true);
+
+      try {
+        const { data } = await axios.get<{ success: boolean; review: SavedReviewResponse; message?: string }>(
+          `${API_BASE}/api/reviews/${reviewId}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          },
+        );
+
+        if (!data.success || !data.review) {
+          toast({
+            variant: "destructive",
+            title: "Error",
+            description: data.message || "Failed to load review",
+          });
+          return;
+        }
+
+        setTitle(data.review.title);
+        setLanguage(data.review.language);
+        setAnalysis(data.review.analysis);
+      } catch (error: unknown) {
+        const message = axios.isAxiosError(error)
+          ? error.response?.data?.message
+          : error instanceof Error
+            ? error.message
+            : undefined;
+
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: message || "Failed to load review",
+        });
+      } finally {
+        setIsLoadingReview(false);
+      }
+    };
+
+    void fetchReview();
+  }, [searchParams, toast]);
 
   const handleAnalyze = async () => {
     if (!code.trim()) {
@@ -119,10 +169,8 @@ const CodeReview = () => {
           headers: {
             Authorization: `Bearer ${token}`,
           },
-        }
+        },
       );
-
-      console.log("analysis response:", data);
 
       if (!data.success || !data.analysis) {
         toast({
@@ -139,14 +187,17 @@ const CodeReview = () => {
         title: "Success",
         description: "Code analyzed successfully!",
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error analyzing code:", error);
+      const message = axios.isAxiosError(error)
+        ? error.response?.data?.message
+        : error instanceof Error
+          ? error.message
+          : undefined;
       toast({
         variant: "destructive",
         title: "Error",
-        description:
-          error?.response?.data?.message ||
-          (error instanceof Error ? error.message : "Failed to analyze code"),
+        description: message || "Failed to analyze code",
       });
     } finally {
       setIsAnalyzing(false);
@@ -166,10 +217,6 @@ const CodeReview = () => {
         return "secondary";
     }
   };
-
-  if (!isAuthed) {
-    return null;
-  }
 
   return (
     <SidebarProvider>
@@ -256,7 +303,7 @@ const CodeReview = () => {
 
               {/* Analysis Results Section */}
               <div className="space-y-4">
-                {!analysis && !isAnalyzing && (
+                {!analysis && !isAnalyzing && !isLoadingReview && (
                   <Card className="p-8 text-center">
                     <p className="text-muted-foreground">
                       Enter your code and click &quot;Analyze Code&quot; to get
@@ -265,11 +312,13 @@ const CodeReview = () => {
                   </Card>
                 )}
 
-                {isAnalyzing && (
+                {(isAnalyzing || isLoadingReview) && (
                   <Card className="p-8 text-center">
                     <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
                     <p className="text-muted-foreground">
-                      Analyzing your code...
+                      {isLoadingReview
+                        ? "Loading saved review..."
+                        : "Analyzing your code..."}
                     </p>
                   </Card>
                 )}
@@ -345,9 +394,7 @@ const CodeReview = () => {
                                   </span>
                                 )}
                               </div>
-                              <p className="text-sm mb-2">
-                                {bug.description}
-                              </p>
+                              <p className="text-sm mb-2">{bug.description}</p>
                               <div className="bg-muted/50 rounded p-2 text-sm">
                                 <div className="font-medium mb-1 text-xs text-muted-foreground">
                                   Suggested Fix:
@@ -367,8 +414,8 @@ const CodeReview = () => {
                           <div className="flex items-center gap-2 mb-4">
                             <Shield className="h-5 w-5 text-accent" />
                             <h3 className="font-semibold">
-                              Security Issues (
-                              {analysis.security_issues.length})
+                              Security Issues ({analysis.security_issues.length}
+                              )
                             </h3>
                           </div>
                           <div className="space-y-4">
@@ -444,7 +491,7 @@ const CodeReview = () => {
                           <ul className="space-y-2">
                             {analysis.suggestions.map((suggestion, idx) => (
                               <li key={idx} className="text-sm flex gap-2">
-                                <span className="text-primary">•</span>
+                                <span className="text-primary">&bull;</span>
                                 <span>{suggestion}</span>
                               </li>
                             ))}
@@ -455,9 +502,7 @@ const CodeReview = () => {
                     {/* Refactored Code */}
                     {analysis.refactored_code && (
                       <Card className="p-6">
-                        <h3 className="font-semibold mb-4">
-                          Refactored Code
-                        </h3>
+                        <h3 className="font-semibold mb-4">Refactored Code</h3>
                         <div className="border border-border rounded-lg overflow-hidden">
                           <Editor
                             height="300px"
