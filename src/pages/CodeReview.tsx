@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
@@ -64,6 +64,7 @@ interface SavedReviewResponse {
   id: string;
   title: string;
   language: string;
+  code: string;
   analysis: Analysis;
 }
 
@@ -88,6 +89,8 @@ const CodeReview = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isLoadingReview, setIsLoadingReview] = useState(false);
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
+  const editorRef = useRef<any>(null);
+  const monacoRef = useRef<any>(null);
 
   useEffect(() => {
     const reviewId = searchParams.get("id");
@@ -122,6 +125,7 @@ const CodeReview = () => {
 
         setTitle(data.review.title);
         setLanguage(data.review.language);
+        setCode(data.review.code || "");
         setAnalysis(data.review.analysis);
       } catch (error: unknown) {
         const message = axios.isAxiosError(error)
@@ -142,6 +146,40 @@ const CodeReview = () => {
 
     void fetchReview();
   }, [searchParams, toast]);
+
+  useEffect(() => {
+    if (!editorRef.current || !monacoRef.current) {
+      return;
+    }
+
+    const model = editorRef.current.getModel();
+
+    if (!model) {
+      return;
+    }
+
+    const markers =
+      analysis?.bugs
+        ?.filter((bug) => typeof bug.line === "number")
+        .map((bug) => ({
+          startLineNumber: bug.line,
+          endLineNumber: bug.line,
+          startColumn: 1,
+          endColumn: model.getLineMaxColumn(bug.line),
+          message: `${bug.description} Fix: ${bug.fix}`,
+          severity:
+            bug.severity.toLowerCase() === "high" ||
+            bug.severity.toLowerCase() === "critical"
+              ? monacoRef.current.MarkerSeverity.Error
+              : monacoRef.current.MarkerSeverity.Warning,
+        })) ?? [];
+
+    monacoRef.current.editor.setModelMarkers(
+      model,
+      "review-analysis",
+      markers,
+    );
+  }, [analysis, code]);
 
   const handleAnalyze = async () => {
     if (!code.trim()) {
@@ -234,6 +272,11 @@ const CodeReview = () => {
       default:
         return "secondary";
     }
+  };
+
+  const handleEditorMount = (editor: any, monaco: any) => {
+    editorRef.current = editor;
+    monacoRef.current = monaco;
   };
 
   return (
@@ -334,8 +377,14 @@ const CodeReview = () => {
                     language={language}
                     value={code}
                     onChange={(value) => setCode(value || "")}
+                    onMount={handleEditorMount}
                     theme="vs-dark"
                     options={{
+                      automaticLayout: true,
+                      tabSize: 2,
+                      insertSpaces: true,
+                      formatOnPaste: true,
+                      formatOnType: true,
                       minimap: { enabled: false },
                       fontSize: 14,
                       lineNumbers: "on",
@@ -362,6 +411,33 @@ const CodeReview = () => {
                   </>
                 )}
               </Button>
+
+              <div className="mt-5 grid gap-4 md:grid-cols-3">
+                <div className="rounded-[1.25rem] border border-white/70 bg-white/70 p-4">
+                  <p className="text-sm uppercase tracking-[0.18em] text-muted-foreground">
+                    Bug lines
+                  </p>
+                  <p className="mt-2 text-2xl font-bold">
+                    {analysis?.bugs.filter((bug) => bug.line).length ?? 0}
+                  </p>
+                </div>
+                <div className="rounded-[1.25rem] border border-white/70 bg-white/70 p-4">
+                  <p className="text-sm uppercase tracking-[0.18em] text-muted-foreground">
+                    Corrected code
+                  </p>
+                  <p className="mt-2 text-2xl font-bold">
+                    {analysis?.refactored_code ? "Ready" : "Pending"}
+                  </p>
+                </div>
+                <div className="rounded-[1.25rem] border border-white/70 bg-white/70 p-4">
+                  <p className="text-sm uppercase tracking-[0.18em] text-muted-foreground">
+                    Save state
+                  </p>
+                  <p className="mt-2 text-2xl font-bold">
+                    {analysis ? "Saved" : "Waiting"}
+                  </p>
+                </div>
+              </div>
             </Card>
 
             <div className="space-y-6">

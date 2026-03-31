@@ -2,6 +2,7 @@ import { Router, Request, Response } from "express";
 import { Types } from "mongoose";
 import { authenticateToken, AuthRequest } from "../middleware/auth.middleware";
 import { Review } from "../models/review.model";
+import { analyzeCode } from "../utils/code-analyzer";
 
 const router = Router();
 
@@ -27,21 +28,7 @@ router.post(
         });
       }
 
-      const analysis = {
-        bugs: [],
-        security_issues: [],
-        performance_issues: [],
-        code_quality: {
-          readability: 8,
-          maintainability: 8,
-          security: 8,
-          performance: 8,
-        },
-        overall_score: 80,
-        suggestions: ["Example suggestion: add real analyzer later"],
-        refactored_code: code,
-        test_cases: [],
-      };
+      const analysis = analyzeCode(code, language);
 
       const review = await Review.create({
         userId: new Types.ObjectId(req.userId),

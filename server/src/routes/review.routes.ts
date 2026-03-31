@@ -9,6 +9,7 @@ function toReviewResponse(review: {
   _id: unknown;
   title: string;
   language: string;
+  code: string;
   qualityScore: number;
   analysis: unknown;
   createdAt: Date;
@@ -17,6 +18,7 @@ function toReviewResponse(review: {
     id: String(review._id),
     title: review.title,
     language: review.language,
+    code: review.code,
     quality_score: review.qualityScore,
     analysis: review.analysis,
     created_at: review.createdAt,
