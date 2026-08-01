@@ -1,29 +1,33 @@
-import { Schema, model, type InferSchemaType } from "mongoose";
+// src/models/user.model.ts
 
-const userSchema = new Schema(
-  {
-    name: {
-      type: String,
-      required: true,
-      trim: true,
-    },
-    email: {
-      type: String,
-      required: true,
-      unique: true,
-      lowercase: true,
-      trim: true,
-    },
-    password: {
-      type: String,
-      required: true,
-    },
-  },
-  {
-    timestamps: true,
-  },
-);
+// Interface for user data from Supabase
+export interface IUser {
+  id: string;          // UUID from Supabase
+  name: string;
+  email: string;
+  password: string;
+  created_at?: string; // timestamp from Supabase
+  updated_at?: string; // timestamp from Supabase
+}
 
-export type IUser = InferSchemaType<typeof userSchema> & { _id: string };
+// Interface for user response (without password)
+export interface IUserResponse {
+  id: string;
+  name: string;
+  email: string;
+  created_at?: string;
+  updated_at?: string;
+}
 
-export const User = model("User", userSchema);
+// Interface for user registration input
+export interface IUserRegister {
+  name: string;
+  email: string;
+  password: string;
+}
+
+// Interface for user login input
+export interface IUserLogin {
+  email: string;
+  password: string;
+}

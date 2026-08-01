@@ -1,6 +1,6 @@
 import { Router, Response } from "express";
 import { authenticateToken, AuthRequest } from "../middleware/auth.middleware";
-import { User } from "../models/user.model";
+import { supabase } from "../config/supabase";
 
 const router = Router();
 
@@ -9,11 +9,20 @@ router.get("/", authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId;
 
-    const user = await User.findById(userId)
-      .select("_id name email createdAt")
-      .lean();
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized",
+      });
+    }
 
-    if (!user) {
+    const { data: user, error } = await supabase
+      .from("User")
+      .select("id, name, email, created_at")
+      .eq("id", userId)
+      .single();
+
+    if (error || !user) {
       return res.status(404).json({
         success: false,
         message: "User not found",
@@ -23,10 +32,10 @@ router.get("/", authenticateToken, async (req: AuthRequest, res: Response) => {
     res.json({
       success: true,
       user: {
-        id: user._id.toString(),
+        id: user.id,
         name: user.name,
         email: user.email,
-        created_at: user.createdAt,
+        created_at: user.created_at,
       },
     });
   } catch (err) {
@@ -43,6 +52,13 @@ router.put("/", authenticateToken, async (req: AuthRequest, res: Response) => {
     const userId = req.userId;
     const { name } = req.body;
 
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized",
+      });
+    }
+
     if (!name || !name.trim()) {
       return res.status(400).json({
         success: false,
@@ -50,15 +66,14 @@ router.put("/", authenticateToken, async (req: AuthRequest, res: Response) => {
       });
     }
 
-    const user = await User.findByIdAndUpdate(
-      userId,
-      { name: name.trim() },
-      { new: true },
-    )
-      .select("_id name email createdAt")
-      .lean();
+    const { data: user, error } = await supabase
+      .from("User")
+      .update({ name: name.trim(), updated_at: new Date().toISOString() })
+      .eq("id", userId)
+      .select("id, name, email, created_at")
+      .single();
 
-    if (!user) {
+    if (error || !user) {
       return res.status(500).json({
         success: false,
         message: "Failed to update profile",
@@ -68,10 +83,10 @@ router.put("/", authenticateToken, async (req: AuthRequest, res: Response) => {
     res.json({
       success: true,
       user: {
-        id: user._id.toString(),
+        id: user.id,
         name: user.name,
         email: user.email,
-        created_at: user.createdAt,
+        created_at: user.created_at,
       },
     });
   } catch (err) {

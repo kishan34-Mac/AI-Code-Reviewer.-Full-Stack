@@ -1,28 +1,22 @@
-import { Link } from "react-router-dom";
-import { Button } from "@/components/ui/button";
-import { Compass } from "lucide-react";
+import { useLocation } from "react-router-dom";
+import { useEffect } from "react";
+import axios from "axios";
 
 const NotFound = () => {
-  return (
-    <div className="page-shell flex min-h-screen items-center justify-center px-4">
-      <div className="page-orb left-[-8rem] top-10 h-72 w-72 bg-primary/20" />
-      <div className="page-orb bottom-0 right-[-8rem] h-80 w-80 bg-accent/20" />
+  const location = useLocation();
 
-      <div className="premium-card relative z-10 max-w-xl p-12 text-center">
-        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[1.5rem] bg-[image:var(--gradient-primary)] text-white shadow-[var(--shadow-glow)]">
-          <Compass className="h-7 w-7" />
-        </div>
-        <p className="mt-8 text-sm uppercase tracking-[0.28em] text-muted-foreground">
-          404 Error
-        </p>
-        <h1 className="mt-4 text-5xl font-bold">This route drifted off the map.</h1>
-        <p className="mt-5 text-lg leading-8 text-muted-foreground">
-          The page you tried to open does not exist anymore or never existed in
-          this workspace.
-        </p>
-        <Link to="/">
-          <Button className="mt-8 rounded-full px-6">Return Home</Button>
-        </Link>
+  useEffect(() => {
+    console.error("404 Error: User attempted to access non-existent route:", location.pathname);
+  }, [location.pathname]);
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-muted">
+      <div className="text-center">
+        <h1 className="mb-4 text-4xl font-bold">404</h1>
+        <p className="mb-4 text-xl text-muted-foreground">Oops! Page not found</p>
+        <a href="/" className="text-primary underline hover:text-primary/90">
+          Return to Home
+        </a>
       </div>
     </div>
   );

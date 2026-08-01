@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { API_BASE } from "@/lib/api";
+
+ 
 import {
   Card,
   CardContent,
@@ -13,10 +15,13 @@ import {
 } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Code2, Loader2, ShieldCheck, Sparkles, Zap } from "lucide-react";
+import { Code, Loader2 } from "lucide-react";
 import { z } from "zod";
 import axios from "axios";
 
+
+
+// Validation schemas
 const emailSchema = z.string().email("Invalid email address");
 const passwordSchema = z
   .string()
@@ -30,18 +35,20 @@ const Auth = () => {
   const [isSigningUp, setIsSigningUp] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [name, setName] = useState("");
+  const [fullName, setFullName] = useState("");
 
+  // Redirect if token already exists
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (token) navigate("/dashboard", { replace: true });
   }, [navigate]);
 
+  // Validate user input
   const validateForm = (isSignup: boolean) => {
     try {
       emailSchema.parse(email);
       passwordSchema.parse(password);
-      if (isSignup && !name.trim()) {
+      if (isSignup && !fullName.trim()) {
         throw new Error("Full name is required");
       }
       return true;
@@ -63,6 +70,7 @@ const Auth = () => {
     }
   };
 
+  // Handle Sign Up
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validateForm(true)) return;
@@ -71,7 +79,7 @@ const Auth = () => {
 
     try {
       const { data } = await axios.post(`${API_BASE}/api/auth/register`, {
-        name,
+        username: fullName, // backend expects username
         email,
         password,
       });
@@ -79,7 +87,6 @@ const Auth = () => {
       if (data.success && data.token) {
         localStorage.setItem("token", data.token);
         localStorage.setItem("email", email);
-        localStorage.setItem("userName", name);
         toast({
           title: "Success!",
           description: "Account created successfully.",
@@ -92,20 +99,18 @@ const Auth = () => {
           description: data.message || "Something went wrong.",
         });
       }
-    } catch (err: unknown) {
-      const message = axios.isAxiosError(err)
-        ? err.response?.data?.message
-        : undefined;
+    } catch (err: any) {
       toast({
         variant: "destructive",
         title: "Sign up failed",
-        description: message || "Server error",
+        description: err?.response?.data?.message || "Server error",
       });
     } finally {
       setIsSigningUp(false);
     }
   };
 
+  // Handle Sign In
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validateForm(false)) return;
@@ -121,9 +126,6 @@ const Auth = () => {
       if (data.success && data.token) {
         localStorage.setItem("token", data.token);
         localStorage.setItem("email", email);
-        if (data.user?.name) {
-          localStorage.setItem("userName", data.user.name);
-        }
         toast({
           title: "Welcome back!",
           description: "Login successful.",
@@ -136,14 +138,11 @@ const Auth = () => {
           description: data.message || "Invalid credentials",
         });
       }
-    } catch (err: unknown) {
-      const message = axios.isAxiosError(err)
-        ? err.response?.data?.message
-        : undefined;
+    } catch (err: any) {
       toast({
         variant: "destructive",
         title: "Login failed",
-        description: message || "Server error",
+        description: err?.response?.data?.message || "Server error",
       });
     } finally {
       setIsSigningIn(false);
@@ -151,191 +150,136 @@ const Auth = () => {
   };
 
   return (
-    <div className="page-shell flex min-h-screen items-center justify-center px-4 py-12">
-      <div className="page-orb left-[-9rem] top-8 h-72 w-72 bg-primary/20" />
-      <div className="page-orb bottom-0 right-[-8rem] h-80 w-80 bg-accent/20" />
-
-      <div className="relative z-10 grid w-full max-w-6xl gap-8 lg:grid-cols-[1fr_0.9fr]">
-        <Card className="premium-card hidden overflow-hidden p-8 lg:block">
-          <div className="flex h-full flex-col justify-between">
-            <div>
-              <div className="section-eyebrow mb-6">
-                <Sparkles className="h-3.5 w-3.5" />
-                Review Workspace
-              </div>
-              <h1 className="max-w-md text-5xl font-bold leading-tight">
-                Make every merge feel a little more confident.
-              </h1>
-              <p className="mt-5 max-w-xl text-lg leading-8 text-muted-foreground">
-                Audit logic, security, and maintainability inside a warm, modern
-                workspace built for developers who move fast.
-              </p>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-muted/20 to-background p-4">
+      <Card className="w-full max-w-md">
+        <CardHeader className="space-y-4">
+          <div className="flex items-center justify-center gap-2">
+            <div className="w-10 h-10 bg-gradient-primary rounded-lg flex items-center justify-center">
+              <Code className="w-6 h-6 text-primary-foreground" />
             </div>
-
-            <div className="mt-10 grid gap-4">
-              {[
-                {
-                  icon: ShieldCheck,
-                  title: "Security aware",
-                  copy: "Catch auth flaws, unsafe patterns, and risky assumptions.",
-                },
-                {
-                  icon: Zap,
-                  title: "Instant scoring",
-                  copy: "Turn snippets into quality scores, findings, and fixes.",
-                },
-              ].map((item) => (
-                <div
-                  key={item.title}
-                  className="rounded-[1.5rem] border border-white/60 bg-white/70 p-5"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-                      <item.icon className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <p className="font-semibold">{item.title}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {item.copy}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
+            <span className="text-2xl font-bold">AI Code Reviewer</span>
           </div>
-        </Card>
 
-        <Card className="premium-card animate-rise w-full overflow-hidden">
-          <CardHeader className="space-y-6 pb-2">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[image:var(--gradient-primary)] shadow-[var(--shadow-glow)]">
-              <Code2 className="h-7 w-7 text-white" />
-            </div>
-            <div className="text-center">
-              <CardTitle className="text-3xl">Welcome back</CardTitle>
-              <CardDescription className="mt-2 text-base">
-                Sign in to review, save, and improve your code in one place.
-              </CardDescription>
-            </div>
-          </CardHeader>
+          <div>
+            <CardTitle className="text-2xl text-center">Welcome</CardTitle>
+            <CardDescription className="text-center">
+              Sign in to start reviewing your code with AI
+            </CardDescription>
+          </div>
+        </CardHeader>
 
-          <CardContent className="pt-4">
-            <Tabs defaultValue="signin" className="w-full">
-              <TabsList className="grid h-12 w-full grid-cols-2 rounded-full bg-muted/70 p-1">
-                <TabsTrigger value="signin" className="rounded-full">
-                  Sign In
-                </TabsTrigger>
-                <TabsTrigger value="signup" className="rounded-full">
-                  Sign Up
-                </TabsTrigger>
-              </TabsList>
+        <CardContent>
+          <Tabs defaultValue="signin" className="w-full">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="signin">Sign In</TabsTrigger>
+              <TabsTrigger value="signup">Sign Up</TabsTrigger>
+            </TabsList>
 
-              <TabsContent value="signin" className="mt-6">
-                <form onSubmit={handleSignIn} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Email</Label>
-                    <Input
-                      type="email"
-                      placeholder="you@example.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      disabled={isSigningIn || isSigningUp}
-                      required
-                      className="h-12 rounded-2xl border-white/60 bg-white/70"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Password</Label>
-                    <Input
-                      type="password"
-                      placeholder="********"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      disabled={isSigningIn || isSigningUp}
-                      required
-                      className="h-12 rounded-2xl border-white/60 bg-white/70"
-                    />
-                  </div>
-
-                  <Button
-                    type="submit"
-                    className="h-12 w-full rounded-2xl"
+            {/* SIGN IN FORM */}
+            <TabsContent value="signin">
+              <form onSubmit={handleSignIn} className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Email</Label>
+                  <Input
+                    type="email"
+                    placeholder="you@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
                     disabled={isSigningIn || isSigningUp}
-                  >
-                    {isSigningIn ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Signing in...
-                      </>
-                    ) : (
-                      "Enter Workspace"
-                    )}
-                  </Button>
-                </form>
-              </TabsContent>
+                    required
+                  />
+                </div>
 
-              <TabsContent value="signup" className="mt-6">
-                <form onSubmit={handleSignUp} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Full Name</Label>
-                    <Input
-                      type="text"
-                      placeholder="John Doe"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      disabled={isSigningIn || isSigningUp}
-                      required
-                      className="h-12 rounded-2xl border-white/60 bg-white/70"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Email</Label>
-                    <Input
-                      type="email"
-                      placeholder="you@example.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      disabled={isSigningIn || isSigningUp}
-                      required
-                      className="h-12 rounded-2xl border-white/60 bg-white/70"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Password</Label>
-                    <Input
-                      type="password"
-                      placeholder="Minimum 6 characters"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      disabled={isSigningIn || isSigningUp}
-                      required
-                      className="h-12 rounded-2xl border-white/60 bg-white/70"
-                    />
-                  </div>
-
-                  <Button
-                    type="submit"
-                    className="h-12 w-full rounded-2xl"
+                <div className="space-y-2">
+                  <Label>Password</Label>
+                  <Input
+                    type="password"
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
                     disabled={isSigningIn || isSigningUp}
-                  >
-                    {isSigningUp ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Creating account...
-                      </>
-                    ) : (
-                      "Create Account"
-                    )}
-                  </Button>
-                </form>
-              </TabsContent>
-            </Tabs>
-          </CardContent>
-        </Card>
-      </div>
+                    required
+                  />
+                </div>
+
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={isSigningIn || isSigningUp}
+                >
+                  {isSigningIn ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Signing in...
+                    </>
+                  ) : (
+                    "Sign In"
+                  )}
+                </Button>
+              </form>
+            </TabsContent>
+
+            {/* SIGN UP FORM */}
+            <TabsContent value="signup">
+              <form onSubmit={handleSignUp} className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Full Name</Label>
+                  <Input
+                    type="text"
+                    placeholder="John Doe"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    disabled={isSigningIn || isSigningUp}
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Email</Label>
+                  <Input
+                    type="email"
+                    placeholder="you@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    disabled={isSigningIn || isSigningUp}
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Password</Label>
+                  <Input
+                    type="password"
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    disabled={isSigningIn || isSigningUp}
+                    required
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Password must be at least 6 characters
+                  </p>
+                </div>
+
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={isSigningIn || isSigningUp}
+                >
+                  {isSigningUp ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Creating account...
+                    </>
+                  ) : (
+                    "Create Account"
+                  )}
+                </Button>
+              </form>
+            </TabsContent>
+          </Tabs>
+        </CardContent>
+      </Card>
     </div>
   );
 };

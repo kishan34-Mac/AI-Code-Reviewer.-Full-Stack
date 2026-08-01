@@ -2,7 +2,8 @@
 import type { Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { User } from "../models/user.model";
+import { supabase } from "../config/supabase";
+import type { IUser, IUserResponse } from "../models/user.model";
 
 function getJwtSecret() {
   const secret = process.env.JWT_SECRET;
@@ -15,16 +16,20 @@ function getJwtSecret() {
 export const register = async (req: Request, res: Response) => {
   try {
     const { name, email, password } = req.body;
-    const normalizedEmail = email?.trim().toLowerCase();
 
-    if (!name || !normalizedEmail || !password) {
+    if (!name || !email || !password) {
       return res.status(400).json({
         success: false,
         message: "name, email and password are required",
       });
     }
 
-    const existingUser = await User.findOne({ email: normalizedEmail }).lean();
+    // Check if User exists
+    const { data: existingUser, error: checkError } = await supabase
+      .from('User')
+      .select('*')
+      .eq('email', email)
+      .maybeSingle(); // Use maybeSingle() instead of single() to avoid error when no User found
 
     if (existingUser) {
       return res.status(400).json({
@@ -33,15 +38,37 @@ export const register = async (req: Request, res: Response) => {
       });
     }
 
+    // Hash password
     const hash = await bcrypt.hash(password, 10);
 
-    const user = await User.create({
-      name: name.trim(),
-      email: normalizedEmail,
-      password: hash,
-    });
+    // Create User in Supabase
+    const { data: User, error } = await supabase
+      .from('User')
+      .insert({
+        name,
+        email,
+        password: hash,
+      })
+      .select()
+      .single();
 
-    const token = jwt.sign({ id: user.id }, getJwtSecret(), {
+    if (error) {
+      console.error('Supabase error:', error);
+      return res.status(500).json({
+        success: false,
+        message: "Failed to create User",
+      });
+    }
+
+    if (!User) {
+      return res.status(500).json({
+        success: false,
+        message: "Failed to create User",
+      });
+    }
+
+    // Generate JWT token
+    const token = jwt.sign({ id: User.id }, getJwtSecret(), {
       expiresIn: "1d",
     });
 
@@ -49,14 +76,14 @@ export const register = async (req: Request, res: Response) => {
       success: true,
       message: "User created",
       token,
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
+      User: {
+        id: User.id,
+        name: User.name,
+        email: User.email,
       },
     });
   } catch (err) {
-    console.error("Register error:", err);
+    console.error('Register error:', err);
     return res.status(500).json({
       success: false,
       message: "Server error",
@@ -67,25 +94,38 @@ export const register = async (req: Request, res: Response) => {
 export const login = async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body;
-    const normalizedEmail = email?.trim().toLowerCase();
 
-    if (!normalizedEmail || !password) {
+    if (!email || !password) {
       return res.status(400).json({
         success: false,
         message: "email and password are required",
       });
     }
 
-    const user = await User.findOne({ email: normalizedEmail });
+    // Find User by email
+    const { data: User, error } = await supabase
+      .from('User')
+      .select('*')
+      .eq('email', email)
+      .maybeSingle(); // Use maybeSingle() to avoid error when User not found
 
-    if (!user) {
+    if (error) {
+      console.error('Supabase error:', error);
+      return res.status(500).json({
+        success: false,
+        message: "Server error",
+      });
+    }
+
+    if (!User) {
       return res.status(400).json({
         success: false,
         message: "Invalid credentials",
       });
     }
 
-    const ok = await bcrypt.compare(password, user.password);
+    // Compare password
+    const ok = await bcrypt.compare(password, User.password);
     if (!ok) {
       return res.status(400).json({
         success: false,
@@ -93,7 +133,8 @@ export const login = async (req: Request, res: Response) => {
       });
     }
 
-    const token = jwt.sign({ id: user.id }, getJwtSecret(), {
+    // Generate JWT token
+    const token = jwt.sign({ id: User.id }, getJwtSecret(), {
       expiresIn: "1d",
     });
 
@@ -101,14 +142,14 @@ export const login = async (req: Request, res: Response) => {
       success: true,
       message: "Login successful",
       token,
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
+      User: {
+        id: User.id,
+        name: User.name,
+        email: User.email,
       },
     });
   } catch (err) {
-    console.error("Login error:", err);
+    console.error('Login error:', err);
     return res.status(500).json({
       success: false,
       message: "Server error",
